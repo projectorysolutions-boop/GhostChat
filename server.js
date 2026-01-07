@@ -20,7 +20,7 @@ io.on('connection', (socket) => {
             message: 'A participant has joined the session' 
         });
         
-        console.log(`User joined: ${roomCode}`);
+        // console.log(`User joined: ${roomCode}`);
     });
 
     socket.on('send-content', (data) => {
