@@ -35,15 +35,11 @@
         .sys-note::before, .sys-note::after { content: ""; height: 1px; width: 15px; background: var(--border); }
 
         #chat-messages { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
-        .pulse { animation: pulse-animation 2s infinite; }
-        @keyframes pulse-animation { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-
         #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(10px); cursor: zoom-out; }
         #lightbox img { max-width: 95%; max-height: 90%; border-radius: 12px; }
 
         @media (max-width: 640px) {
             .chat-container { height: 100dvh !important; border-radius: 0 !important; border: none !important; }
-            .msg-bubble { max-width: 92% !important; }
         }
     </style>
 </head>
@@ -97,7 +93,7 @@
                 <button onclick="copyCode()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-500 hover:text-blue-500 transition-all">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" stroke-width="2"/></svg>
                 </button>
-                <button onclick="location.reload()" class="bg-red-500 text-white px-3 md:px-5 py-2 rounded-xl text-[10px] font-black">TERMINATE</button>
+                <button onclick="location.reload()" class="bg-red-500 text-white px-3 md:px-5 py-2 rounded-xl text-[10px] font-black uppercase">Terminate</button>
             </div>
         </header>
 
@@ -109,12 +105,12 @@
 
         <footer class="p-4 md:p-6 bg-white/5">
             <div id="progress-container" class="hidden w-full h-1 bg-slate-200 dark:bg-zinc-800 rounded-full mb-4 overflow-hidden"><div id="progress-bar" class="h-full bg-blue-600 w-0 transition-all"></div></div>
-            <div id="preview-bar" class="hidden mb-3 p-2 px-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[10px] font-bold text-blue-500 flex justify-between items-center"><span id="file-name" class="truncate pr-4"></span><button onclick="cancelFile()" class="text-red-500">REMOVE</button></div>
+            <div id="preview-bar" class="hidden mb-3 p-2 px-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[10px] font-bold text-blue-500 flex justify-between items-center"><span id="file-name" class="truncate pr-4 font-mono"></span><button onclick="cancelFile()" class="text-red-500 font-black">REMOVE</button></div>
             <div class="flex items-center gap-2 md:gap-3">
                 <div class="flex-1 flex items-center glass rounded-2xl px-3 md:px-4 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
                     <label class="p-2 cursor-pointer text-slate-400 hover:text-blue-500">
                         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                        <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="showPreview()">
+                         <input type="file" id="fileInput" class="hidden" accept="*/*" onchange="showPreview()">
                     </label>
                     <input id="msgInput" type="text" autocomplete="off" placeholder="Message..." class="w-full bg-transparent py-3.5 md:py-4 px-1 text-sm focus:outline-none">
                 </div>
@@ -176,7 +172,8 @@
             const file = document.getElementById('fileInput').files[0];
             if(file) {
                 document.getElementById('preview-bar').classList.remove('hidden');
-                document.getElementById('file-name').innerText = file.name;
+                const size = (file.size / 1024).toFixed(1) + " KB";
+                document.getElementById('file-name').innerText = `${file.name} (${size})`;
             }
         }
 
@@ -191,13 +188,18 @@
             if(!msg && !file) return;
 
             const data = { room: myRoom, message: msg, senderId: socket.id };
+            
             if(file) {
                 const reader = new FileReader();
                 document.getElementById('progress-container').classList.remove('hidden');
                 document.getElementById('progress-bar').style.width = "100%";
+                
                 reader.readAsDataURL(file);
                 reader.onload = () => {
-                    data.image = reader.result;
+                    data.fileData = reader.result;
+                    data.fileName = file.name;
+                    data.fileType = file.type;
+                    
                     socket.emit('send-content', data);
                     setTimeout(() => document.getElementById('progress-container').classList.add('hidden'), 500);
                     resetInputs();
@@ -242,8 +244,27 @@
             const isMe = data.senderId === socket.id;
             const bubble = document.createElement('div');
             bubble.className = `msg-bubble max-w-[88%] md:max-w-[70%] p-3.5 md:p-4 text-[13px] md:text-sm shadow-sm ${isMe ? 'my-msg' : 'friend-msg'}`;
+            
             let content = `<p class="leading-relaxed whitespace-pre-wrap">${data.message || ''}</p>`;
-            if(data.image) content += `<img src="${data.image}" onclick="zoomImage(this.src)" class="mt-3 rounded-xl max-h-60 w-full object-cover">`;
+            
+            if(data.fileData) {
+                const isImg = data.fileType && data.fileType.startsWith('image/');
+                if(isImg) {
+                    content += `<img src="${data.fileData}" onclick="zoomImage(this.src)" class="mt-3 rounded-xl max-h-60 w-full object-cover cursor-pointer hover:opacity-90">`;
+                } else {
+                    content += `
+                        <a href="${data.fileData}" download="${data.fileName}" class="mt-3 flex items-center gap-3 p-3 rounded-xl bg-black/10 dark:bg-white/10 border border-white/5 hover:bg-black/20 transition-all no-underline text-inherit overflow-hidden">
+                            <div class="bg-blue-500/20 p-2 rounded-lg shrink-0">
+                                <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="font-bold truncate text-[11px] font-mono">${data.fileName}</div>
+                                <div class="text-[9px] opacity-60 font-black uppercase tracking-tighter">Download File</div>
+                            </div>
+                        </a>`;
+                }
+            }
+            
             bubble.innerHTML = content;
             document.getElementById('chat-messages').appendChild(bubble);
             scrollDown();
@@ -251,4 +272,3 @@
     </script>
 </body>
 </html>
-
